@@ -1,0 +1,76 @@
+# Configure the DigitalOcean Provider
+terraform {
+  required_providers {
+    digitalocean = {
+      source  = "digitalocean/digitalocean"
+      version = "~> 2.0"
+    }
+  }
+}
+
+# Set the DigitalOcean token as a variable
+variable "do_token" {
+  description = "DigitalOcean API Token"
+  type        = string
+  sensitive   = true
+}
+
+# Configure the DigitalOcean Provider with the token
+provider "digitalocean" {
+  token = var.do_token
+}
+
+# Create SSH key resource
+resource "digitalocean_ssh_key" "default" {
+  name       = "Default SSH Key"
+  public_key = file("teraform.pub")  # Update this path to your SSH public key
+}
+
+# Create a web droplet
+resource "digitalocean_droplet" "devops" {
+  count    = 4  # Number of droplets to create
+  name     = "cluster-${count.index + 1}"
+  size     = "s-4vcpu-8gb"  # Basic droplet size
+  image    = "ubuntu-20-04-x64"
+  region   = "blr1"  # New York 1 region
+  ssh_keys = [digitalocean_ssh_key.default.fingerprint]
+
+  # Initial setup script
+  user_data = <<-EOF
+              #!/bin/bash
+              apt-get update
+              apt install -y curl
+            
+
+              EOF
+
+  tags = ["devops", "production"]
+
+  # Volume attachment (optional)
+  # volume_ids = [digitalocean_volume.web_data.id]
+
+  # Backups configuration
+  backups = false
+
+  # VPC configuration (optional)
+  # vpc_uuid = digitalocean_vpc.web_vpc.id
+
+  # Monitoring configuration
+  monitoring = true
+}
+
+# Output the droplet IPs
+output "droplet_ips" {
+  value = {
+    for droplet in digitalocean_droplet.devops :
+    droplet.name => droplet.ipv4_address
+  }
+}
+
+# Output the droplet URLs
+output "droplet_urls" {
+  value = {
+    for droplet in digitalocean_droplet.devops :
+    droplet.name => "http://${droplet.ipv4_address}"
+  }
+}
